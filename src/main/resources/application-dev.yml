@@ -1,0 +1,14 @@
+app:
+  jwt:
+    secret: ${JWT_SECRET}
+    issuer: gestao-facil
+    expiration-seconds: 1800
+  setup:
+    initial-token: ${INITIAL_SETUP_TOKEN:}
+
+logging:
+  level:
+    com.gestaofacil: DEBUG
+    org.springframework.security: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level [%thread] %logger{36} - %msg%n"

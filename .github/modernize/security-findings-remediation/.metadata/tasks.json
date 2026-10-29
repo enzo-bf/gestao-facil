@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Focused tasks to close the remaining security findings in Gestao Facil.",
+  "tasks": [
+    {
+      "type": "upgrade",
+      "id": "001-upgrade-spring-boot-4",
+      "description": "Upgrade to a compatible current Spring Boot 4.x and Spring Framework 7.x release.",
+      "reason": "The current Spring MVC dependency is affected by CVE-2026-47884 and CVE-2026-47890, with no patched Spring 6.2 artifact identified in the existing security review.",
+      "requirements": "Keep Java 25. Select available compatible patched Spring Boot 4.x and Spring Framework 7.x artifacts that remove CVE-2026-47884 and CVE-2026-47890. Resolve SpringDoc and any other compatibility issues; do not retain known CVEs to avoid the major upgrade. Verify Maven tests and build, and run Trivy if available. Preserve existing user changes.",
+      "dependencies": [],
+      "successCriteria": {
+        "passBuild": "true",
+        "generateNewUnitTests": "false",
+        "passUnitTests": "true"
+      }
+    },
+    {
+      "type": "transform",
+      "id": "002-replace-browser-bearer-auth",
+      "description": "Move browser authentication to secure server-managed JWT cookies with CSRF protection.",
+      "reason": "Bearer JWTs in localStorage are exposed to browser-side script access, and cookie-based authentication requires deliberate CSRF protection.",
+      "requirements": "Replace browser localStorage bearer JWT authentication with server-set HttpOnly JWT cookies; make Secure configurable for local development and production and select an appropriate SameSite policy. Protect state-changing requests against CSRF and expose safe CSRF-token acquisition for Axios. Enable credentialed CORS only for explicit trusted origins. Update login, first-user setup auto-login, logout, protected-route behavior, session detection, tests, and docs. Preserve server-side token revocation. Never log credentials, tokens, cookies, or CSRF tokens, and do not persist bearer tokens in browser storage. Add or adjust auth-flow, cookie/session, and CSRF tests as feasible.",
+      "dependencies": [
+        "001-upgrade-spring-boot-4"
+      ],
+      "successCriteria": {
+        "passBuild": "true",
+        "generateNewUnitTests": "true",
+        "passUnitTests": "true"
+      }
+    },
+    {
+      "type": "transform",
+      "id": "003-distribute-auth-rate-limits",
+      "description": "Replace per-process authentication limits with shared Redis-backed limits.",
+      "reason": "In-memory, per-instance rate limits do not aggregate authentication attempts across application replicas.",
+      "requirements": "Implement atomic/shared Redis-backed authentication rate limits. Wire required configuration into development and production Docker Compose, environment examples, and production documentation. Ensure Redis unavailability results in explicit startup failure or documented fail-closed behavior, with no silent in-memory fallback. Do not trust spoofable forwarded-IP headers unless a trusted-proxy policy is explicitly enforced. Add or adjust tests for shared limits, Redis-unavailable behavior, and relevant authentication flows as feasible.",
+      "dependencies": [
+        "002-replace-browser-bearer-auth"
+      ],
+      "successCriteria": {
+        "passBuild": "true",
+        "generateNewUnitTests": "true",
+        "passUnitTests": "true"
+      }
+    },
+    {
+      "type": "security",
+      "id": "004-verify-and-document-security-outcomes",
+      "description": "Verify the completed security changes and update the security report and user documentation.",
+      "reason": "The existing security review identifies three residual findings and must report verified outcomes and remaining risk accurately.",
+      "requirements": "Run targeted tests for the changed authentication, CSRF, cookie/session, and rate-limit behavior, followed by the relevant full tests and Maven build. Run Trivy if available. Update SECURITY_REVIEW.md with accurate final outcomes, actual test and scan evidence, and residual risks; update production documentation and README link if appropriate. Document any unavailable scan, failed setup, or other concrete environment blocker; do not claim unobserved results. Preserve existing user changes. Stop once targeted/full relevant tests and available scans have run or a concrete environment blocker is documented. Do not create a Git repository or commit.",
+      "dependencies": [
+        "003-distribute-auth-rate-limits"
+      ],
+      "skills": [
+        {
+          "name": "cve-remediation",
+          "location": "builtin"
+        }
+      ],
+      "successCriteria": {
+        "passBuild": "true",
+        "generateNewUnitTests": "true",
+        "passUnitTests": "true"
+      }
+    }
+  ],
+  "metadata": {
+    "planName": "security-findings-remediation",
+    "projectName": "Gestao Facil",
+    "language": "java",
+    "createdAt": "2026-10-29T14:52:07.749-03:00",
+    "version": "1.0"
+  }
+}
