@@ -57,7 +57,7 @@ public class SecurityConfig {
         configuration.setAllowedOrigins(origins);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Content-Type", "Accept", "X-Setup-Token", "X-XSRF-TOKEN"));
-        configuration.setExposedHeaders(List.of("Content-Disposition"));
+        configuration.setExposedHeaders(List.of("Content-Disposition", "X-CSRF-Error"));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
 
@@ -71,6 +71,16 @@ public class SecurityConfig {
             AuthRateLimitFilter authRateLimitFilter
     ) {
         FilterRegistrationBean<AuthRateLimitFilter> registration = new FilterRegistrationBean<>(authRateLimitFilter);
+        registration.setEnabled(false);
+        return registration;
+    }
+
+    @Bean
+    FilterRegistrationBean<JwtAuthenticationFilter> jwtAuthenticationFilterRegistration(
+            JwtAuthenticationFilter jwtAuthenticationFilter
+    ) {
+        FilterRegistrationBean<JwtAuthenticationFilter> registration =
+                new FilterRegistrationBean<>(jwtAuthenticationFilter);
         registration.setEnabled(false);
         return registration;
     }
@@ -109,9 +119,14 @@ public class SecurityConfig {
                         .authenticationEntryPoint(authenticationEntryPoint)
                         .accessDeniedHandler(accessDeniedHandler))
                 .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/register").denyAll()
                         .requestMatchers(
                                 "/api/v1/auth/login",
+                                "/api/v1/auth/register",
+                                "/api/v1/auth/verify-email",
+                                "/api/v1/auth/resend-verification",
+                                "/api/v1/auth/forgot-password",
+                                "/api/v1/auth/reset-password",
+                                "/api/v1/auth/activate-invitation",
                                 "/api/v1/auth/csrf",
                                 "/api/v1/setup/status",
                                 "/api/v1/setup/first-user",
@@ -121,7 +136,29 @@ public class SecurityConfig {
                                 "/actuator/health",
                                 "/actuator/health/**"
                         ).permitAll()
-                        .anyRequest().authenticated())
+                        .requestMatchers(HttpMethod.GET, "/api/v1/clients", "/api/v1/clients/**").hasAuthority("CLIENT_VIEW")
+                        .requestMatchers(HttpMethod.POST, "/api/v1/clients").hasAuthority("CLIENT_CREATE")
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/clients/**").hasAuthority("CLIENT_UPDATE")
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/clients/**").hasAuthority("CLIENT_DELETE")
+                        .requestMatchers(HttpMethod.GET, "/api/v1/service-orders", "/api/v1/service-orders/**").hasAuthority("OS_VIEW")
+                        .requestMatchers(HttpMethod.POST, "/api/v1/service-orders").hasAuthority("OS_CREATE")
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/service-orders/**")
+                        .hasAuthority("OS_UPDATE")
+                        .requestMatchers(HttpMethod.PATCH, "/api/v1/service-orders/**")
+                        .hasAuthority("OS_UPDATE")
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/service-orders/**")
+                        .hasAuthority("OS_DELETE")
+                        .requestMatchers(HttpMethod.GET, "/api/v1/budgets", "/api/v1/budgets/**")
+                        .hasAuthority("BUDGET_VIEW")
+                        .requestMatchers(HttpMethod.POST, "/api/v1/budgets").hasAuthority("BUDGET_CREATE")
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/budgets/**").hasAuthority("BUDGET_UPDATE")
+                        .requestMatchers(HttpMethod.PATCH, "/api/v1/budgets/**").hasAuthority("BUDGET_UPDATE")
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/budgets/**").hasAuthority("BUDGET_DELETE")
+                        .requestMatchers("/api/v1/users/**", "/api/v1/permissions/**", "/api/v1/audit-events/**")
+                        .hasAuthority("USER_MANAGE")
+                        .requestMatchers("/api/v1/profile/**", "/api/v1/auth/session", "/api/v1/auth/logout")
+                        .authenticated()
+                        .anyRequest().denyAll())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(authRateLimitFilter, JwtAuthenticationFilter.class)
                 .build();

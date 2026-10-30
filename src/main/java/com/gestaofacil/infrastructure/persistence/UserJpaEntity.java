@@ -28,9 +28,24 @@ public class UserJpaEntity {
     @Column(nullable = false, unique = true, length = 254)
     private String email;
 
+    @Column(length = 20)
+    private String phone;
+
     @Column(nullable = false, length = 255)
     private String password;
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
+
+    @Column(name = "organization_id", nullable = false)
+    private UUID organizationId;
+
+    @Column(name = "email_verified", nullable = false)
+    private boolean emailVerified;
+
+    @Column(nullable = false)
+    private boolean active;
+
+    @Column(name = "credential_version", nullable = false)
+    private long credentialVersion;
 }

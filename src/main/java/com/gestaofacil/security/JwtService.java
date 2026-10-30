@@ -25,15 +25,25 @@ public class JwtService {
     }
 
     public String generateToken(String subject) {
+        return generateToken(subject, 0);
+    }
+
+    public String generateToken(String subject, long credentialVersion) {
         Instant now = Instant.now();
         return Jwts.builder()
                 .issuer(properties.issuer())
                 .id(UUID.randomUUID().toString())
                 .subject(subject)
+                .claim("credentialVersion", credentialVersion)
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plusSeconds(properties.expirationSeconds())))
                 .signWith(signingKey)
                 .compact();
+    }
+
+    public long extractCredentialVersion(String token) {
+        Number value = parseToken(token).get("credentialVersion", Number.class);
+        return value == null ? 0 : value.longValue();
     }
 
     public String extractSubject(String token) {

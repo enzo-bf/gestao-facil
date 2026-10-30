@@ -3,7 +3,7 @@ import { useMutation } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail, Sparkles } from "lucide-react";
 import { useForm } from "react-hook-form";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { z } from "zod";
 import { useAuth } from "../auth/AuthContext";
 import { getApiErrorMessage, authApi } from "../lib/api";
@@ -25,10 +25,12 @@ export function LoginPage() {
     defaultValues: { email: "", password: "" },
   });
   const mutation = useMutation({
-    mutationFn: ({ email, password }: LoginValues) => authApi.login(email, password),
-    onSuccess: (response) => {
-      login(response.user);
-      toast(`Que bom ter você de volta, ${response.user.name.split(" ")[0]}!`);
+    mutationFn: async ({ email, password }: LoginValues) => {
+      await authApi.login(email, password);
+      return login();
+    },
+    onSuccess: (user) => {
+      toast(`Que bom ter você de volta, ${user.name.split(" ")[0]}!`);
       navigate("/dashboard", { replace: true });
     },
     onError: (error) => toast(getApiErrorMessage(error), "error"),
@@ -89,6 +91,10 @@ export function LoginPage() {
             </button>
           </form>
 
+          <div className="login-register-prompt">
+            <span>Sua primeira vez no Gestão Fácil?</span>
+            <Link className="button button-secondary" to="/register">Criar minha conta</Link>
+          </div>
           <div className="login-trust"><span className="trust-lock"><LockKeyhole size={14} /></span> Seus dados estão protegidos e seguros.</div>
         </div>
         <div className="login-mobile-footer">© {new Date().getFullYear()} Gestão Fácil</div>

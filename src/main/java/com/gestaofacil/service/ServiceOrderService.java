@@ -93,7 +93,7 @@ public class ServiceOrderService {
     private UUID findOwnerId(String authenticatedEmail) {
         User user = userRepository.findByEmail(normalizeEmail(authenticatedEmail))
                 .orElseThrow(() -> new EntityNotFoundException("Usuário autenticado não encontrado."));
-        return user.getId();
+        return user.getOrganizationId();
     }
 
     private Client findOwnedClient(UUID clientId, UUID ownerId) {

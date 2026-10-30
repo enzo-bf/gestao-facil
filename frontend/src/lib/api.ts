@@ -1,13 +1,20 @@
-import axios from "axios";
+import axios, { type AxiosError } from "axios";
 import type {
   ApiErrorResponse,
   AuthUser,
+  AuditEvent,
   Budget,
   BudgetRequest,
   BudgetStatus,
+  CreateManagedUserRequest,
   Client,
   ClientRequest,
   LoginResponse,
+  ManagedUser,
+  Permission,
+  Profile,
+  ProfileRequest,
+  RegisterRequest,
   ServiceOrder,
   ServiceOrderRequest,
   ServiceOrderStatus,
@@ -18,6 +25,19 @@ import type {
 export const SETUP_STATUS_QUERY_KEY = ["setup-status"];
 let csrfToken: string | null = null;
 let csrfTokenRequest: Promise<string> | null = null;
+let csrfTokenGeneration = 0;
+
+function hasCsrfRejectionHeader(error: AxiosError): boolean {
+  const header = Object.entries(error.response?.headers ?? {})
+    .find(([name]) => name.toLowerCase() === "x-csrf-error")?.[1];
+  return header === "true";
+}
+
+declare module "axios" {
+  export interface AxiosRequestConfig {
+    csrfRetry?: boolean;
+  }
+}
 
 export const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL ?? "",
@@ -27,15 +47,24 @@ export const api = axios.create({
 
 async function getCsrfToken(): Promise<string> {
   if (csrfToken) return csrfToken;
-  csrfTokenRequest ??= api.get<{ token: string }>("/api/v1/auth/csrf")
+  if (!csrfTokenRequest) {
+    const generation = csrfTokenGeneration;
+    csrfTokenRequest = api.get<{ token: string }>("/api/v1/auth/csrf")
     .then(({ data }) => {
-      csrfToken = data.token;
-      return csrfToken;
+      if (generation === csrfTokenGeneration) csrfToken = data.token;
+      return data.token;
     })
     .finally(() => {
-      csrfTokenRequest = null;
+      if (generation === csrfTokenGeneration) csrfTokenRequest = null;
     });
+  }
   return csrfTokenRequest;
+}
+
+function invalidateCsrfToken(): void {
+  csrfTokenGeneration += 1;
+  csrfToken = null;
+  csrfTokenRequest = null;
 }
 
 api.interceptors.request.use(async (config) => {
@@ -47,13 +76,33 @@ api.interceptors.request.use(async (config) => {
 
 api.interceptors.response.use(
   (response) => response,
-  (error: unknown) => {
+  async (error: unknown) => {
+    if (!axios.isAxiosError(error) || !error.config) return Promise.reject(error);
+
+    const config = error.config;
+    const path = config.url ?? "";
     if (
-      axios.isAxiosError(error) &&
       error.response?.status === 401 &&
-      !error.config?.url?.includes("/auth/login")
+      !path.startsWith("/api/v1/auth/") &&
+      !path.startsWith("/api/v1/setup/")
     ) {
       window.dispatchEvent(new CustomEvent("auth:unauthorized"));
+    }
+
+    if (
+      error.response?.status === 403 &&
+      hasCsrfRejectionHeader(error) &&
+      !config.csrfRetry &&
+      ["post", "put", "patch", "delete"].includes((config.method ?? "get").toLowerCase())
+    ) {
+      config.csrfRetry = true;
+      invalidateCsrfToken();
+      try {
+        config.headers.set("X-XSRF-TOKEN", await getCsrfToken());
+        return await api.request(config);
+      } catch (retryError) {
+        return Promise.reject(retryError);
+      }
     }
     return Promise.reject(error);
   },
@@ -73,9 +122,29 @@ export function getApiErrorMessage(error: unknown): string {
 export const authApi = {
   async login(email: string, password: string): Promise<LoginResponse> {
     const response = await api.post<LoginResponse>("/api/v1/auth/login", { email, password });
-    csrfToken = null;
+    invalidateCsrfToken();
     await getCsrfToken();
     return response.data;
+  },
+  async register(request: RegisterRequest): Promise<LoginResponse> {
+    const response = await api.post<LoginResponse>("/api/v1/auth/register", request);
+    invalidateCsrfToken();
+    return response.data;
+  },
+  async verifyEmail(token: string): Promise<void> {
+    await api.post("/api/v1/auth/verify-email", { token });
+  },
+  async resendVerification(email: string): Promise<void> {
+    await api.post("/api/v1/auth/resend-verification", { email });
+  },
+  async forgotPassword(email: string): Promise<void> {
+    await api.post("/api/v1/auth/forgot-password", { email });
+  },
+  async resetPassword(token: string, password: string): Promise<void> {
+    await api.post("/api/v1/auth/reset-password", { token, password });
+  },
+  async activateInvitation(token: string, password: string): Promise<void> {
+    await api.post("/api/v1/auth/activate-invitation", { token, password });
   },
   async session(): Promise<AuthUser> {
     const response = await api.get<AuthUser>("/api/v1/auth/session");
@@ -83,6 +152,47 @@ export const authApi = {
   },
   async logout(): Promise<void> {
     await api.post("/api/v1/auth/logout");
+  },
+};
+
+export const usersApi = {
+  async findAll(): Promise<ManagedUser[]> {
+    const response = await api.get<ManagedUser[]>("/api/v1/users");
+    return response.data;
+  },
+  async findPermissions(): Promise<Permission[]> {
+    const response = await api.get<Permission[]>("/api/v1/permissions");
+    return response.data;
+  },
+  async invite(request: CreateManagedUserRequest): Promise<ManagedUser> {
+    const response = await api.post<ManagedUser>("/api/v1/users", request);
+    return response.data;
+  },
+  async updatePermissions(id: string, permissions: string[]): Promise<ManagedUser> {
+    const response = await api.put<ManagedUser>(`/api/v1/users/${id}/permissions`, { permissions });
+    return response.data;
+  },
+  async updateStatus(id: string, active: boolean): Promise<ManagedUser> {
+    const response = await api.patch<ManagedUser>(`/api/v1/users/${id}/status`, { active });
+    return response.data;
+  },
+  async remove(id: string): Promise<void> {
+    await api.delete(`/api/v1/users/${id}`);
+  },
+  async auditEvents(): Promise<AuditEvent[]> {
+    const response = await api.get<AuditEvent[]>("/api/v1/audit-events");
+    return response.data;
+  },
+};
+
+export const profileApi = {
+  async find(): Promise<Profile> {
+    const response = await api.get<Profile>("/api/v1/profile");
+    return response.data;
+  },
+  async update(request: ProfileRequest): Promise<Profile> {
+    const response = await api.put<Profile>("/api/v1/profile", request);
+    return response.data;
   },
 };
 

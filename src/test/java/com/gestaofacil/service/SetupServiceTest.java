@@ -33,11 +33,17 @@ class SetupServiceTest {
     @Mock
     private UserService userService;
 
+    @Mock
+    private AccountEmailService accountEmailService;
+
     private SetupService setupService;
 
     @org.junit.jupiter.api.BeforeEach
     void setUp() {
-        setupService = new SetupService(jdbcTemplate, userRepository, userService, "initial-setup-token-for-tests-0123456789");
+        setupService = new SetupService(
+                jdbcTemplate, userRepository, userService, accountEmailService,
+                "initial-setup-token-for-tests-0123456789"
+        );
     }
 
     @Test
@@ -65,6 +71,7 @@ class SetupServiceTest {
 
         verify(jdbcTemplate).execute("SELECT pg_advisory_xact_lock(71620260102)");
         verify(userService).register(request);
+        verify(accountEmailService).sendVerification(expected.email());
     }
 
     @Test
@@ -92,7 +99,7 @@ class SetupServiceTest {
 
     @Test
     void disablesSetupWhenNoBootstrapTokenIsConfigured() {
-        SetupService disabledSetup = new SetupService(jdbcTemplate, userRepository, userService, "");
+        SetupService disabledSetup = new SetupService(jdbcTemplate, userRepository, userService, accountEmailService, "");
         UserRequestDTO request = new UserRequestDTO("Ana Souza", "ana@example.com", "senha-segura-123");
 
         assertThrows(com.gestaofacil.exception.SetupUnavailableException.class,

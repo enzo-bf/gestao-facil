@@ -5,15 +5,20 @@ import { EmptyState } from "../components/EmptyState";
 import { LoadingState } from "../components/LoadingState";
 import { StatusBadge } from "../components/StatusBadge";
 import { budgetsApi, clientsApi, serviceOrdersApi } from "../lib/api";
+import { usePermission } from "../auth/PermissionContext";
 import type { ServiceOrderStatus } from "../types";
 
 export function DashboardPage() {
-  const clients = useQuery({ queryKey: ["clients"], queryFn: clientsApi.findAll });
-  const orders = useQuery({ queryKey: ["service-orders"], queryFn: serviceOrdersApi.findAll });
-  const budgets = useQuery({ queryKey: ["budgets"], queryFn: budgetsApi.findAll });
+  const { hasPermission } = usePermission();
+  const canViewClients = hasPermission("CLIENT_VIEW");
+  const canViewOrders = hasPermission("OS_VIEW");
+  const canViewBudgets = hasPermission("BUDGET_VIEW");
+  const clients = useQuery({ queryKey: ["clients"], queryFn: clientsApi.findAll, enabled: canViewClients });
+  const orders = useQuery({ queryKey: ["service-orders"], queryFn: serviceOrdersApi.findAll, enabled: canViewOrders });
+  const budgets = useQuery({ queryKey: ["budgets"], queryFn: budgetsApi.findAll, enabled: canViewBudgets });
 
-  if (clients.isLoading || orders.isLoading || budgets.isLoading) return <LoadingState label="Preparando sua visão geral..." />;
-  if (clients.isError || orders.isError || budgets.isError) {
+  if ((canViewClients && clients.isLoading) || (canViewOrders && orders.isLoading) || (canViewBudgets && budgets.isLoading)) return <LoadingState label="Preparando sua visão geral..." />;
+  if ((canViewClients && clients.isError) || (canViewOrders && orders.isError) || (canViewBudgets && budgets.isError)) {
     return <div className="inline-error" role="alert">Não foi possível carregar os indicadores. Atualize a página para tentar novamente.</div>;
   }
 
@@ -24,14 +29,18 @@ export function DashboardPage() {
   const completedCount = orderList.filter((order) => order.status === "COMPLETED").length;
   const approvedBudgets = budgetList.filter((budget) => budget.status === "APPROVED");
   const metrics = [
-    { label: "Total de clientes", value: clientList.length, icon: Users, tone: "metric-green", note: "Na sua carteira" },
-    { label: "Ordens de serviço", value: orderList.length, icon: BriefcaseBusiness, tone: "metric-blue", note: "Registradas no total" },
-    { label: "Ordens abertas", value: openCount, icon: CircleDashed, tone: "metric-amber", note: "Aguardando atendimento" },
-    { label: "Concluídas", value: completedCount, icon: CircleCheck, tone: "metric-purple", note: "Serviços finalizados" },
-    { label: "Total de orçamentos", value: budgetList.length, icon: BadgeDollarSign, tone: "metric-blue", note: "Propostas registradas" },
-    { label: "Orçamentos aprovados", value: approvedBudgets.length, icon: ThumbsUp, tone: "metric-green", note: "Aceitos pelos clientes" },
-    { label: "Orçamentos rejeitados", value: budgetList.filter((budget) => budget.status === "REJECTED").length, icon: ThumbsDown, tone: "metric-amber", note: "Não aprovados" },
-    { label: "Valor aprovado", value: formatCurrency(approvedBudgets.reduce((total, budget) => total + budget.value, 0)), icon: BadgeDollarSign, tone: "metric-purple", note: "Em propostas aprovadas", isCurrency: true },
+    ...(canViewClients ? [{ label: "Total de clientes", value: clientList.length, icon: Users, tone: "metric-green", note: "Na sua carteira" }] : []),
+    ...(canViewOrders ? [
+      { label: "Ordens de serviço", value: orderList.length, icon: BriefcaseBusiness, tone: "metric-blue", note: "Registradas no total" },
+      { label: "Ordens abertas", value: openCount, icon: CircleDashed, tone: "metric-amber", note: "Aguardando atendimento" },
+      { label: "Concluídas", value: completedCount, icon: CircleCheck, tone: "metric-purple", note: "Serviços finalizados" },
+    ] : []),
+    ...(canViewBudgets ? [
+      { label: "Total de orçamentos", value: budgetList.length, icon: BadgeDollarSign, tone: "metric-blue", note: "Propostas registradas" },
+      { label: "Orçamentos aprovados", value: approvedBudgets.length, icon: ThumbsUp, tone: "metric-green", note: "Aceitos pelos clientes" },
+      { label: "Orçamentos rejeitados", value: budgetList.filter((budget) => budget.status === "REJECTED").length, icon: ThumbsDown, tone: "metric-amber", note: "Não aprovados" },
+      { label: "Valor aprovado", value: formatCurrency(approvedBudgets.reduce((total, budget) => total + budget.value, 0)), icon: BadgeDollarSign, tone: "metric-purple", note: "Em propostas aprovadas", isCurrency: true },
+    ] : []),
   ];
 
   return (
@@ -41,7 +50,7 @@ export function DashboardPage() {
           <div className="welcome-kicker"><span /> SEU NEGÓCIO EM UM SÓ LUGAR</div>
           <h1>Bom dia, vamos fazer acontecer<span>?</span></h1>
           <p>Acompanhe o que está acontecendo no seu negócio hoje.</p>
-          <Link className="welcome-link" to="/service-orders">Ver ordens de serviço <ArrowRight size={16} /></Link>
+          {canViewOrders && <Link className="welcome-link" to="/service-orders">Ver ordens de serviço <ArrowRight size={16} /></Link>}
         </div>
         <div className="welcome-illustration" aria-hidden="true">
           <div className="illustration-sun" />
@@ -67,7 +76,9 @@ export function DashboardPage() {
         ))}
       </section>
 
-      <section className="content-card recent-card">
+      {metrics.length === 0 && <div className="inline-empty">Seu administrador ainda não liberou acesso aos dados do dashboard.</div>}
+
+      {canViewOrders && <section className="content-card recent-card">
         <div className="content-card-heading">
           <div><span className="section-eyebrow">MOVIMENTAÇÃO</span><h2>Ordens recentes</h2></div>
           <Link to="/service-orders" className="text-link">Ver todas <ArrowRight size={15} /></Link>
@@ -93,7 +104,7 @@ export function DashboardPage() {
             </table>
           </div>
         )}
-      </section>
+      </section>}
       <div className="dashboard-footnote"><span>✳</span> Um passo de cada vez. Seu negócio está no caminho certo.</div>
     </div>
   );

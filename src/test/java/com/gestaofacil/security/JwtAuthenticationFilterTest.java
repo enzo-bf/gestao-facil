@@ -7,6 +7,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.security.core.userdetails.UserDetailsService;
 
 import java.util.Base64;
 
@@ -26,7 +27,9 @@ class JwtAuthenticationFilterTest {
         TokenRevocationRepository revocations = mock(TokenRevocationRepository.class);
         var entryPoint = (org.springframework.security.web.AuthenticationEntryPoint)
                 (request, response, exception) -> response.sendError(HttpServletResponse.SC_UNAUTHORIZED);
-        JwtAuthenticationFilter filter = new JwtAuthenticationFilter(jwtService, revocations, entryPoint);
+        JwtAuthenticationFilter filter = new JwtAuthenticationFilter(
+                jwtService, revocations, entryPoint, mock(UserDetailsService.class)
+        );
         String token = jwtService.generateToken("user@example.com");
         when(revocations.isRevoked(jwtService.extractTokenId(token))).thenReturn(true);
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/clients");
@@ -50,7 +53,9 @@ class JwtAuthenticationFilterTest {
         TokenRevocationRepository revocations = mock(TokenRevocationRepository.class);
         var entryPoint = (org.springframework.security.web.AuthenticationEntryPoint)
                 (request, response, exception) -> response.sendError(HttpServletResponse.SC_UNAUTHORIZED);
-        JwtAuthenticationFilter filter = new JwtAuthenticationFilter(jwtService, revocations, entryPoint);
+        JwtAuthenticationFilter filter = new JwtAuthenticationFilter(
+                jwtService, revocations, entryPoint, mock(UserDetailsService.class)
+        );
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/clients");
         request.addHeader("Authorization", "Bearer " + jwtService.generateToken("user@example.com"));
         MockHttpServletResponse response = new MockHttpServletResponse();
@@ -71,7 +76,9 @@ class JwtAuthenticationFilterTest {
         TokenRevocationRepository revocations = mock(TokenRevocationRepository.class);
         var entryPoint = (org.springframework.security.web.AuthenticationEntryPoint)
                 (request, response, exception) -> response.sendError(HttpServletResponse.SC_UNAUTHORIZED);
-        JwtAuthenticationFilter filter = new JwtAuthenticationFilter(jwtService, revocations, entryPoint);
+        JwtAuthenticationFilter filter = new JwtAuthenticationFilter(
+                jwtService, revocations, entryPoint, mock(UserDetailsService.class)
+        );
         MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/auth/login");
         request.setServletPath("/api/v1/auth/login");
         request.setCookies(new Cookie(AuthCookieFactory.AUTH_COOKIE_NAME, "stale-token"));

@@ -31,9 +31,9 @@ public class ClientService {
         Client client = Client.create(
                 ownerId,
                 request.name().trim(),
-                request.phone().trim(),
+                normalizeDigits(request.phone()),
                 normalizeOptionalEmail(request.email()),
-                normalizeOptionalValue(request.document())
+                normalizeOptionalDigits(request.document())
         );
         return clientMapper.toResponse(clientRepository.save(client));
     }
@@ -43,9 +43,9 @@ public class ClientService {
         UUID ownerId = findOwnerId(authenticatedEmail);
         Client client = findOwnedClient(id, ownerId).update(
                 request.name().trim(),
-                request.phone().trim(),
+                normalizeDigits(request.phone()),
                 normalizeOptionalEmail(request.email()),
-                normalizeOptionalValue(request.document())
+                normalizeOptionalDigits(request.document())
         );
         return clientMapper.toResponse(clientRepository.save(client));
     }
@@ -73,7 +73,7 @@ public class ClientService {
     private UUID findOwnerId(String authenticatedEmail) {
         User user = userRepository.findByEmail(normalizeEmail(authenticatedEmail))
                 .orElseThrow(() -> new EntityNotFoundException("Usuário autenticado não encontrado."));
-        return user.getId();
+        return user.getOrganizationId();
     }
 
     private Client findOwnedClient(UUID id, UUID ownerId) {
@@ -84,6 +84,15 @@ public class ClientService {
     private String normalizeOptionalEmail(String email) {
         String normalized = normalizeOptionalValue(email);
         return normalized == null ? null : normalizeEmail(normalized);
+    }
+
+    private String normalizeOptionalDigits(String value) {
+        String normalized = normalizeOptionalValue(value);
+        return normalized == null ? null : normalizeDigits(normalized);
+    }
+
+    private String normalizeDigits(String value) {
+        return value.replaceAll("\\D", "");
     }
 
     private String normalizeOptionalValue(String value) {

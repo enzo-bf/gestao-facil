@@ -45,14 +45,14 @@ export function FirstAccessPage() {
       await setupApi.createFirstUser({ name: name.trim(), email: email.trim(), password }, setupToken);
       queryClient.setQueryData(SETUP_STATUS_QUERY_KEY, { firstAccess: false });
       try {
-        return await authApi.login(email.trim(), password);
+        await authApi.login(email.trim(), password);
+        return await login();
       } catch {
         throw new AccountCreatedWithoutLoginError();
       }
     },
-    onSuccess: (response) => {
-      login(response.user);
-      toast(`Conta criada. Boas-vindas, ${response.user.name.split(" ")[0]}!`);
+    onSuccess: (user) => {
+      toast(`Conta criada. Boas-vindas, ${user.name.split(" ")[0]}!`);
       navigate("/dashboard", { replace: true });
     },
     onError: (error) => {

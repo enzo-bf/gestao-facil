@@ -43,6 +43,9 @@ services:
       JWT_COOKIE_SECURE: ${JWT_COOKIE_SECURE:-false}
       JWT_COOKIE_SAME_SITE: ${JWT_COOKIE_SAME_SITE:-Lax}
       INITIAL_SETUP_TOKEN: ${INITIAL_SETUP_TOKEN:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      MAIL_FROM: ${MAIL_FROM:-}
+      APP_PUBLIC_URL: ${APP_PUBLIC_URL:-http://localhost:5173}
     ports:
       - "${APP_PORT:-8080}:8080"
     depends_on:

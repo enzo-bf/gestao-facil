@@ -8,7 +8,8 @@ interface AuthContextValue {
   user: AuthUser | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (user: AuthUser) => void;
+  login: () => Promise<AuthUser>;
+  refreshUser: () => Promise<AuthUser>;
   logout: () => void;
 }
 
@@ -24,8 +25,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, [queryClient]);
 
-  const login = useCallback((authenticatedUser: AuthUser) => {
+  const login = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const authenticatedUser = await authApi.session();
+      queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== "setup-status" });
+      setUser(authenticatedUser);
+      return authenticatedUser;
+    } catch (error) {
+      setUser(null);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [queryClient]);
+
+  const refreshUser = useCallback(async () => {
+    const authenticatedUser = await authApi.session();
     setUser(authenticatedUser);
+    return authenticatedUser;
   }, []);
 
   useEffect(() => {
@@ -50,8 +68,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [logout]);
 
   const value = useMemo(
-    () => ({ user, isAuthenticated: Boolean(user), isLoading, login, logout }),
-    [user, isLoading, login, logout],
+    () => ({ user, isAuthenticated: Boolean(user), isLoading, login, refreshUser, logout }),
+    [user, isLoading, login, refreshUser, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

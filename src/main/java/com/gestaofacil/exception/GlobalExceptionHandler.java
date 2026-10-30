@@ -73,6 +73,31 @@ public class GlobalExceptionHandler {
         return response(HttpStatus.CONFLICT, exception.getMessage(), request, Map.of());
     }
 
+    @ExceptionHandler(InvalidAccountTokenException.class)
+    public ResponseEntity<ApiErrorResponse> handleInvalidAccountToken(
+            InvalidAccountTokenException exception,
+            HttpServletRequest request
+    ) {
+        return response(HttpStatus.BAD_REQUEST, exception.getMessage(), request, Map.of());
+    }
+
+    @ExceptionHandler(EmailDeliveryException.class)
+    public ResponseEntity<ApiErrorResponse> handleEmailDelivery(
+            EmailDeliveryException exception,
+            HttpServletRequest request
+    ) {
+        log.error("Falha ao enviar e-mail de conta path={}", request.getRequestURI(), exception);
+        return response(HttpStatus.SERVICE_UNAVAILABLE, exception.getMessage(), request, Map.of());
+    }
+
+    @ExceptionHandler(InvalidUserOperationException.class)
+    public ResponseEntity<ApiErrorResponse> handleInvalidUserOperation(
+            InvalidUserOperationException exception,
+            HttpServletRequest request
+    ) {
+        return response(HttpStatus.BAD_REQUEST, exception.getMessage(), request, Map.of());
+    }
+
     @ExceptionHandler(SetupAlreadyCompletedException.class)
     public ResponseEntity<ApiErrorResponse> handleSetupAlreadyCompleted(
             SetupAlreadyCompletedException exception,

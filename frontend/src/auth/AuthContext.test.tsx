@@ -5,10 +5,11 @@ import { AuthProvider, useAuth } from "./AuthContext";
 const mocks = vi.hoisted(() => ({
   session: vi.fn(),
   clear: vi.fn(),
+  removeQueries: vi.fn(),
 }));
 
 vi.mock("@tanstack/react-query", () => ({
-  useQueryClient: () => ({ clear: mocks.clear }),
+  useQueryClient: () => ({ clear: mocks.clear, removeQueries: mocks.removeQueries }),
 }));
 
 vi.mock("../lib/api", () => ({
@@ -27,7 +28,7 @@ function AuthState() {
   return (
     <div>
       <span>{auth.isLoading ? "loading" : auth.isAuthenticated ? auth.user?.email : "anonymous"}</span>
-      <button onClick={() => auth.login(user)}>login</button>
+      <button onClick={() => void auth.login()}>login</button>
       <button onClick={auth.logout}>logout</button>
     </div>
   );
@@ -62,5 +63,16 @@ describe("cookie-backed auth session", () => {
 
     expect(await screen.findByText("anonymous")).toBeInTheDocument();
     expect(mocks.clear).toHaveBeenCalledOnce();
+  });
+
+  it("waits for the server session before exposing an authenticated state", async () => {
+    mocks.session.mockResolvedValueOnce(null).mockResolvedValueOnce(user);
+    render(<AuthProvider><AuthState /></AuthProvider>);
+
+    await screen.findByText("anonymous");
+    fireEvent.click(screen.getByRole("button", { name: "login" }));
+
+    expect(await screen.findByText("ana@example.com")).toBeInTheDocument();
+    expect(mocks.removeQueries).toHaveBeenCalledOnce();
   });
 });

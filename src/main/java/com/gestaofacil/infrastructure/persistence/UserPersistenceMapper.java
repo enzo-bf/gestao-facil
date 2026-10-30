@@ -11,8 +11,13 @@ public class UserPersistenceMapper {
                 user.getId(),
                 user.getName(),
                 user.getEmail(),
+                user.getPhone(),
                 user.getPassword(),
-                user.getCreatedAt()
+                user.getCreatedAt(),
+                user.getOrganizationId(),
+                user.isEmailVerified(),
+                user.isActive(),
+                user.getCredentialVersion()
         );
     }
 
@@ -21,8 +26,13 @@ public class UserPersistenceMapper {
                 entity.getId(),
                 entity.getName(),
                 entity.getEmail(),
+                entity.getPhone(),
                 entity.getPassword(),
-                entity.getCreatedAt()
+                entity.getCreatedAt(),
+                entity.getOrganizationId(),
+                entity.isEmailVerified(),
+                entity.isActive(),
+                entity.getCredentialVersion()
         );
     }
 }

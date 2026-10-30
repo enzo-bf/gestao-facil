@@ -23,17 +23,20 @@ public class SetupService {
     private final JdbcTemplate jdbcTemplate;
     private final UserRepository userRepository;
     private final UserService userService;
+    private final AccountEmailService accountEmailService;
     private final String setupToken;
 
     public SetupService(
             JdbcTemplate jdbcTemplate,
             UserRepository userRepository,
             UserService userService,
+            AccountEmailService accountEmailService,
             @Value("${app.setup.initial-token:}") String setupToken
     ) {
         this.jdbcTemplate = jdbcTemplate;
         this.userRepository = userRepository;
         this.userService = userService;
+        this.accountEmailService = accountEmailService;
         this.setupToken = setupToken;
     }
 
@@ -57,6 +60,8 @@ public class SetupService {
         if (userRepository.existsAny()) {
             throw new SetupAlreadyCompletedException();
         }
-        return userService.register(request);
+        UserResponseDTO user = userService.register(request);
+        accountEmailService.sendVerification(user.email());
+        return user;
     }
 }

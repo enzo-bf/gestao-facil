@@ -34,4 +34,31 @@ class ClientRequestDTOValidationTest {
         assertTrue(validator.validate(request).stream()
                 .anyMatch(violation -> violation.getPropertyPath().toString().equals("email")));
     }
+
+    @Test
+    void acceptsValidCpfAndFormattedBrazilianPhone() {
+        ClientRequestDTO request = new ClientRequestDTO("João da Silva", "(11) 99999-0000", null, "529.982.247-25");
+
+        assertTrue(validator.validate(request).isEmpty());
+    }
+
+    @Test
+    void rejectsInvalidNamePhoneAndDocument() {
+        ClientRequestDTO request = new ClientRequestDTO("João123", "(00) 00000-0000", null, "111.111.111-11");
+
+        var violations = validator.validate(request);
+        assertTrue(violations.stream().anyMatch(violation -> violation.getPropertyPath().toString().equals("name")));
+        assertTrue(violations.stream().anyMatch(violation -> violation.getPropertyPath().toString().equals("phone")));
+        assertTrue(violations.stream().anyMatch(violation -> violation.getPropertyPath().toString().equals("document")));
+    }
+
+    @Test
+    void rejectsMalformedPhoneAndDocumentSeparators() {
+        ClientRequestDTO request = new ClientRequestDTO("Cliente", "(11)))99999-0000", null, "529..982.247-25");
+
+        assertTrue(validator.validate(request).stream()
+                .anyMatch(violation -> violation.getPropertyPath().toString().equals("phone")));
+        assertTrue(validator.validate(request).stream()
+                .anyMatch(violation -> violation.getPropertyPath().toString().equals("document")));
+    }
 }

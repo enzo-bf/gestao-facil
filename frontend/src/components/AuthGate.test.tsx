@@ -65,6 +65,7 @@ describe("AuthGate onboarding", () => {
 
     expect(await screen.findByRole("heading", { name: /bem-vindo de volta/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /entrar na minha conta/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /criar minha conta/i })).toHaveAttribute("href", "/register");
   });
 
   it("shows loading while first-access status is being checked", async () => {
@@ -85,6 +86,12 @@ describe("AuthGate onboarding", () => {
       expiresInSeconds: 1800,
       user: { id: "1", name: "Ana Souza", email: "ana@example.com", createdAt: "2026-10-29T10:00:00" },
     });
+    authMocks.login.mockResolvedValue({
+      id: "1",
+      name: "Ana Souza",
+      email: "ana@example.com",
+      createdAt: "2026-10-29T10:00:00",
+    });
 
     renderAuthGate();
 
@@ -102,7 +109,7 @@ describe("AuthGate onboarding", () => {
       password: "senha-segura-123",
     }, "temporary-bootstrap-secret-for-testing");
     expect(authApi.login).toHaveBeenCalledWith("ana@example.com", "senha-segura-123");
-    expect(authMocks.login).toHaveBeenCalledWith(expect.objectContaining({ email: "ana@example.com" }));
+    expect(authMocks.login).toHaveBeenCalledOnce();
   });
 
   it("shows a clear validation message when the password confirmation differs", async () => {

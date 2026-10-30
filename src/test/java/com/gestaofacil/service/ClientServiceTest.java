@@ -66,7 +66,7 @@ class ClientServiceTest {
         assertEquals("Cliente Exemplo", response.name());
         assertEquals("11999990000", response.phone());
         assertEquals("cliente@example.com", response.email());
-        assertEquals("123.456", response.document());
+        assertEquals("123456", response.document());
     }
 
     @Test

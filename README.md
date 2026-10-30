@@ -1,6 +1,6 @@
 # Gestão Fácil
 
-API REST de um SaaS para pequenas empresas. Esta versão entrega a base do projeto, autenticação JWT, gestão de clientes e ordens de serviço por conta.
+API REST de um SaaS multiusuário para pequenas empresas. Inclui autenticação JWT, confirmação de e-mail, recuperação de senha, workspaces compartilhados, controle granular de permissões e gestão de clientes, ordens de serviço e orçamentos.
 
 ## Stack
 
@@ -16,7 +16,7 @@ O projeto é um monólito modular preparado para crescer:
 
 - `domain`: modelo de negócio sem dependência de persistência.
 - `repository`: portas que representam as operações de dados usadas pelo domínio/aplicação.
-- `service`: casos de uso de cadastro, autenticação, gestão de clientes e ordens de serviço.
+- `service`: casos de uso de autenticação, contas, permissões, workspaces, auditoria e módulos de negócio.
 - `infrastructure`: adaptadores de persistência JPA e integração com Spring Security.
 - `controller` e `dto`: fronteira HTTP versionada e contratos de entrada/saída.
 - `mapper`: conversão de modelos de domínio para respostas da API.
@@ -45,7 +45,9 @@ docker compose down
 
 Os dados permanecem no volume `postgres_data`. Para removê-los intencionalmente, execute `docker compose down -v`.
 
-O primeiro cadastro exige a chave temporária configurada em `INITIAL_SETUP_TOKEN`, enviada no campo de chave da tela inicial. Compartilhe-a com o operador por canal privado e remova-a do ambiente após cadastrar a primeira conta. Se ausente, o cadastro inicial fica desabilitado. O navegador recebe autenticação em cookie JWT HttpOnly com proteção CSRF; o token não é persistido em armazenamento do navegador. Para produção em VPS, use `docker-compose.prod.yml`, Caddy com HTTPS automático e o arquivo `.env.prod.example` como referência. Procedimentos de deploy em Railway/Render/VPS, variáveis de ambiente e backup/restauração PostgreSQL estão em [docs/production.md](./docs/production.md).
+O primeiro cadastro também pode ser feito publicamente pela tela `/register`; a tela de configuração inicial com `INITIAL_SETUP_TOKEN` permanece disponível para o operador. O navegador recebe autenticação em cookie JWT HttpOnly com proteção CSRF; o token não é persistido em armazenamento do navegador. Para produção em VPS, use `docker-compose.prod.yml`, Caddy com HTTPS automático e o arquivo `.env.prod.example` como referência. Procedimentos de deploy em Railway/Render/VPS, variáveis de ambiente e backup/restauração PostgreSQL estão em [docs/production.md](./docs/production.md).
+
+Para habilitar verificação de e-mail, recuperação de senha e convites, configure `RESEND_API_KEY`, `MAIL_FROM` com um remetente verificado no Resend e `APP_PUBLIC_URL` com a URL pública do frontend. Sem essa configuração, essas ações retornam erro explícito e não criam um cadastro que não possa ser confirmado.
 
 ### Sem Docker
 
@@ -66,30 +68,49 @@ O perfil local `dev` é ativado por padrão. Para iniciar em produção, use `SP
 |---|---|---|---|
 | `GET` | `/api/v1/auth/csrf` | Público | Emite token CSRF não armazenável para o cliente HTTP. |
 | `POST` | `/api/v1/auth/login` | Público com CSRF | Autentica, define cookie JWT HttpOnly e retorna dados públicos do usuário. |
+| `POST` | `/api/v1/auth/register` | Público com CSRF e rate limit | Cria workspace e conta admin, envia confirmação e inicia sessão JWT em cookie HttpOnly. |
+| `POST` | `/api/v1/auth/verify-email` | Público com CSRF e rate limit | Confirma e-mail usando token de uso único (24 horas). |
+| `POST` | `/api/v1/auth/resend-verification` | Público com CSRF e rate limit | Reenvia a confirmação sem revelar se o e-mail está cadastrado. |
+| `POST` | `/api/v1/auth/forgot-password` | Público com CSRF e rate limit | Envia link de redefinição (30 minutos), com resposta que não revela a existência da conta. |
+| `POST` | `/api/v1/auth/reset-password` | Público com CSRF e rate limit | Redefine a senha e invalida sessões existentes. |
+| `POST` | `/api/v1/auth/activate-invitation` | Público com CSRF e rate limit | Ativa o convite e define a senha inicial (7 dias). |
 | `GET` | `/api/v1/auth/session` | Autenticado | Retorna o perfil associado ao cookie JWT atual. |
 | `POST` | `/api/v1/auth/logout` | Autenticado com CSRF | Revoga imediatamente o JWT atual e limpa o cookie. |
+| `GET` | `/api/v1/profile` | Autenticado | Retorna nome, e-mail e telefone do usuário atual. |
+| `PUT` | `/api/v1/profile` | Autenticado com CSRF | Atualiza e-mail/telefone; nome permanece somente leitura e alteração de e-mail renova o cookie de sessão. |
 | `GET` | `/api/v1/setup/status` | Público | Informa se a instalação ainda precisa criar a primeira conta. |
 | `POST` | `/api/v1/setup/first-user` | Público com chave de bootstrap, uma única vez | Cria a primeira conta apenas enquanto não houver usuários. |
-| `POST` | `/api/v1/clients` | Autenticado | Cadastra um cliente na conta atual. |
-| `GET` | `/api/v1/clients` | Autenticado | Lista os clientes da conta atual. |
-| `GET` | `/api/v1/clients/{id}` | Autenticado | Busca um cliente da conta atual. |
-| `PUT` | `/api/v1/clients/{id}` | Autenticado | Atualiza um cliente da conta atual. |
-| `DELETE` | `/api/v1/clients/{id}` | Autenticado | Exclui um cliente da conta atual. |
-| `POST` | `/api/v1/service-orders` | Autenticado | Cria uma ordem de serviço para um cliente da conta atual. |
-| `GET` | `/api/v1/service-orders` | Autenticado | Lista as ordens de serviço da conta atual. |
-| `GET` | `/api/v1/service-orders/{id}` | Autenticado | Busca uma ordem de serviço da conta atual. |
-| `PUT` | `/api/v1/service-orders/{id}` | Autenticado | Atualiza descrição, valor e cliente. |
-| `PATCH` | `/api/v1/service-orders/{id}/status` | Autenticado | Atualiza o status da ordem. |
-| `DELETE` | `/api/v1/service-orders/{id}` | Autenticado | Exclui uma ordem de serviço da conta atual. |
-| `POST` | `/api/v1/budgets` | Autenticado | Cria orçamento pendente para um cliente. |
-| `GET` | `/api/v1/budgets` | Autenticado | Lista orçamentos da conta. |
-| `GET` | `/api/v1/budgets/{id}` | Autenticado | Busca um orçamento da conta. |
-| `PUT` | `/api/v1/budgets/{id}` | Autenticado | Atualiza os dados do orçamento. |
-| `PATCH` | `/api/v1/budgets/{id}/status` | Autenticado | Aprova ou rejeita o orçamento. |
-| `DELETE` | `/api/v1/budgets/{id}` | Autenticado | Exclui um orçamento. |
-| `GET` | `/api/v1/budgets/{id}/pdf` | Autenticado | Baixa o orçamento em PDF, válido por 30 dias. |
+| `POST` | `/api/v1/clients` | `CLIENT_CREATE` | Cadastra um cliente no workspace. |
+| `GET` | `/api/v1/clients[/{id}]` | `CLIENT_VIEW` | Lista ou busca clientes do workspace. |
+| `PUT` | `/api/v1/clients/{id}` | `CLIENT_UPDATE` | Atualiza um cliente do workspace. |
+| `DELETE` | `/api/v1/clients/{id}` | `CLIENT_DELETE` | Exclui um cliente do workspace. |
+| `POST` | `/api/v1/service-orders` | `OS_CREATE` | Cria uma ordem de serviço. |
+| `GET` | `/api/v1/service-orders[/{id}]` | `OS_VIEW` | Lista ou busca ordens de serviço. |
+| `PUT` | `/api/v1/service-orders/{id}` | `OS_UPDATE` | Atualiza descrição, valor e cliente. |
+| `PATCH` | `/api/v1/service-orders/{id}/status` | `OS_UPDATE` | Atualiza o status da ordem. |
+| `DELETE` | `/api/v1/service-orders/{id}` | `OS_DELETE` | Exclui uma ordem de serviço. |
+| `POST` | `/api/v1/budgets` | `BUDGET_CREATE` | Cria orçamento pendente para um cliente. |
+| `GET` | `/api/v1/budgets[/{id}]` e `/api/v1/budgets/{id}/pdf` | `BUDGET_VIEW` | Consulta orçamento e baixa PDF. |
+| `PUT` | `/api/v1/budgets/{id}` | `BUDGET_UPDATE` | Atualiza os dados do orçamento. |
+| `PATCH` | `/api/v1/budgets/{id}/status` | `BUDGET_UPDATE` | Aprova ou rejeita o orçamento. |
+| `DELETE` | `/api/v1/budgets/{id}` | `BUDGET_DELETE` | Exclui um orçamento. |
+| `GET` | `/api/v1/users` | `USER_MANAGE` | Lista membros do workspace e suas permissões. |
+| `POST` | `/api/v1/users` | `USER_MANAGE` | Convida um usuário com permissões individuais. |
+| `GET` | `/api/v1/permissions` | `USER_MANAGE` | Lista o catálogo de permissões disponíveis. |
+| `PUT` | `/api/v1/users/{id}/permissions` | `USER_MANAGE` | Substitui permissões do usuário. |
+| `PATCH` | `/api/v1/users/{id}/status` | `USER_MANAGE` | Ativa ou desativa o usuário. |
+| `DELETE` | `/api/v1/users/{id}` | `USER_MANAGE` | Remove um membro do workspace. |
+| `GET` | `/api/v1/audit-events` | `USER_MANAGE` | Consulta eventos recentes do workspace. |
 
 O navegador envia o cookie JWT automaticamente; todas as operações de alteração exigem `X-XSRF-TOKEN`, obtido em `GET /api/v1/auth/csrf`. O frontend usa `withCredentials` e CORS aceita somente as origens configuradas. Erros seguem o formato comum com `timestamp`, `status`, `error`, `message`, `path` e `fieldErrors`.
+
+O login aguarda a confirmação da sessão no servidor antes de navegar para as telas protegidas. Consultas repetem apenas falhas transitórias; uma rejeição CSRF identificada recebe atualização do token e, no máximo, uma repetição da operação. Clientes têm validação de nome, telefone brasileiro e dígitos verificadores de CPF/CNPJ no frontend e no backend. Valores de orçamento e ordens usam máscara monetária brasileira no formulário.
+
+### Workspaces, permissões e auditoria
+
+Cada cadastro público cria um workspace e recebe todas as permissões do catálogo. Contas já existentes são migradas para workspaces próprios, preservando seus dados; convites associam novos membros ao workspace do administrador. Clientes e orçamentos são compartilhados entre membros do mesmo workspace e permanecem isolados entre empresas. Não há perfis fixos: a autorização é feita por permissões individuais, validada em cada endpoint e refletida no menu e nas ações da interface. As permissões disponíveis são `CLIENT_VIEW/CREATE/UPDATE/DELETE`, `OS_VIEW/CREATE/UPDATE/DELETE`, `BUDGET_VIEW/CREATE/UPDATE/DELETE`, `DASHBOARD_VIEW`, `SETTINGS_MANAGE` e `USER_MANAGE`. Sem permissão, a API responde `403 Forbidden`; endpoints não mapeados são negados por padrão.
+
+O administrador não pode remover a própria conta nem desativar/remover/retirar a gestão do último administrador ativo e verificado. A auditoria registra mutações em clientes, ordens de serviço, orçamentos e administração de usuários, com ator, ação, recurso, identificador e horário.
 
 Consulte a [revisão de segurança](./SECURITY_REVIEW.md) para os achados verificados, limites dos testes e riscos residuais.
 
@@ -97,17 +118,18 @@ Consulte a [revisão de segurança](./SECURITY_REVIEW.md) para os achados verifi
 
 ### Primeiro acesso
 
-Em uma instalação sem usuários, o frontend verifica `GET /api/v1/setup/status` e apresenta a criação da primeira conta. Configure `INITIAL_SETUP_TOKEN` com pelo menos 32 caracteres aleatórios e entregue a chave temporária ao operador por canal privado; o frontend a envia somente no cabeçalho `X-Setup-Token`, nunca no corpo nem em armazenamento persistente. O endpoint `POST /api/v1/setup/first-user` aceita o corpo somente uma vez; tentativas posteriores recebem `409 Conflict`. O cadastro inicial é serializado no PostgreSQL para evitar duas primeiras contas em requisições simultâneas. Após cadastrar a conta, remova a chave do ambiente e faça login normalmente. O cadastro público legado `/api/v1/auth/register` não é disponibilizado.
+Em uma instalação sem usuários, o frontend verifica `GET /api/v1/setup/status` e apresenta a configuração inicial protegida pelo `INITIAL_SETUP_TOKEN`. O cadastro normal também está disponível em `POST /api/v1/auth/register` e na tela `/register`, sem chave de bootstrap; esse endpoint exige CSRF e rate limit e bloqueia e-mails já cadastrados.
 
 ```json
 {
   "name": "Seu Nome",
   "email": "voce@exemplo.com",
-  "password": "senha-segura-123"
+  "phone": "(11) 99999-1234",
+  "password": "Senha123"
 }
 ```
 
-Quando já existe usuário, a tela exibe o login normal.
+O endpoint de cadastro retorna a mesma resposta pública do login e define o cookie HttpOnly. A interface confirma a sessão e direciona o usuário para a confirmação de e-mail; módulos de negócio só liberam acesso após a validação do link.
 
 Login:
 
@@ -171,7 +193,7 @@ O orçamento pode ser associado opcionalmente a uma ordem de serviço do mesmo c
 - Health check: `http://localhost:8080/actuator/health`
 - Readiness/liveness: `/actuator/health/readiness` e `/actuator/health/liveness`
 
-Em produção o health check não revela detalhes dos componentes. A API usa CORS com origens explícitas, headers de segurança, logs JSON e rate limit para login/cadastro. Veja [docs/production.md](./docs/production.md) para operação, backup e deploy.
+Em produção o health check não revela detalhes dos componentes. A API usa CORS com origens explícitas, headers de segurança, logs JSON e rate limit nos endpoints de autenticação e ações de conta. Veja [docs/production.md](./docs/production.md) para operação, backup e deploy.
 
 Achados, correções, riscos residuais e evidências da auditoria de segurança estão em [SECURITY_REVIEW.md](./SECURITY_REVIEW.md).
 
@@ -190,7 +212,7 @@ npm run build
 ## Roadmap
 
 1. Produtos e serviços.
-2. Perfis e permissões, recuperação de senha e refresh token.
+2. Relatórios avançados e exportação.
 3. Pipeline CI/CD e observabilidade ampliada.
 
 Os recursos posteriores podem ser adicionados como módulos independentes, mantendo o versionamento `/api/v1` e os casos de uso isolados.
@@ -207,7 +229,7 @@ npm run dev
 
 O Vite fica disponível em `http://localhost:5173` e encaminha `/api` para `http://localhost:8080`. Inicie a API e o PostgreSQL com `docker compose up --build` em outro terminal. Para apontar para outra API, configure `VITE_API_BASE_URL` ou `API_PROXY_TARGET` conforme necessário.
 
-O painel inclui login JWT, dashboard, gestão de clientes, ordens de serviço e orçamentos com aprovação/rejeição e download de PDF; o Swagger permanece em `http://localhost:8080/swagger-ui.html`.
+O painel inclui login, cadastro, verificação de e-mail, recuperação de senha, perfil, gestão de usuários e permissões, dashboard, clientes, ordens de serviço e orçamentos com aprovação/rejeição e download de PDF; o Swagger permanece em `http://localhost:8080/swagger-ui.html`.
 
 Para validar a compilação e as regras de lint:
 

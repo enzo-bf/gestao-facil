@@ -46,7 +46,13 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
     protected boolean shouldNotFilter(HttpServletRequest request) {
         if (!HttpMethod.POST.matches(request.getMethod())) return true;
         String path = request.getServletPath();
-        return !"/api/v1/auth/login".equals(path)
+        return !("/api/v1/auth/login".equals(path)
+                || "/api/v1/auth/register".equals(path)
+                || "/api/v1/auth/verify-email".equals(path)
+                || "/api/v1/auth/resend-verification".equals(path)
+                || "/api/v1/auth/forgot-password".equals(path)
+                || "/api/v1/auth/reset-password".equals(path)
+                || "/api/v1/auth/activate-invitation".equals(path))
                 && !"/api/v1/setup/first-user".equals(path);
     }
 
@@ -68,20 +74,22 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
                 throw new IllegalStateException("Redis did not return an authentication rate-limit count.");
             }
         } catch (RuntimeException exception) {
-            writeError(response, 503, "O serviço de autenticação está temporariamente indisponível.");
+            writeError(response, 503, "O serviço de autenticação está temporariamente indisponível.",
+                    request.getServletPath());
             return;
         }
 
         if (requestCount > requestsPerMinute) {
             response.setHeader("Retry-After", Long.toString(WINDOW_SECONDS));
-            writeError(response, 429, "Muitas tentativas de autenticação. Aguarde antes de tentar novamente.");
+            writeError(response, 429, "Muitas tentativas de autenticação. Aguarde antes de tentar novamente.",
+                    request.getServletPath());
             return;
         }
         filterChain.doFilter(request, response);
     }
 
-    private void writeError(HttpServletResponse response, int status, String message) throws IOException {
+    private void writeError(HttpServletResponse response, int status, String message, String path) throws IOException {
         String error = status == 429 ? "Too Many Requests" : "Service Unavailable";
-        ApiErrorResponseWriter.write(response, status, error, message, "/api/v1/auth/login");
+        ApiErrorResponseWriter.write(response, status, error, message, path);
     }
 }

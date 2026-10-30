@@ -64,6 +64,27 @@ class AuthRateLimitFilterTest {
         assertEquals(0, passedRequests.get());
     }
 
+    @Test
+    void rateLimitsPublicRegistrationRequests() throws Exception {
+        StringRedisTemplate redis = mock(StringRedisTemplate.class);
+        when(redis.execute(
+                ArgumentMatchers.<RedisScript<Long>>any(),
+                ArgumentMatchers.<List<String>>any(),
+                ArgumentMatchers.<Object[]>any()
+        )).thenReturn(2L);
+        AuthRateLimitFilter filter = new AuthRateLimitFilter(redis, 1);
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/auth/register");
+        request.setServletPath("/api/v1/auth/register");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        AtomicInteger passedRequests = new AtomicInteger();
+
+        filter.doFilter(request, response, (incoming, outgoing) -> passedRequests.incrementAndGet());
+
+        assertEquals(0, passedRequests.get());
+        assertEquals(429, response.getStatus());
+        assertTrue(response.getContentAsString().contains("\"path\":\"/api/v1/auth/register\""));
+    }
+
     private MockHttpServletRequest authRequest() {
         MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/auth/login");
         request.setServletPath("/api/v1/auth/login");

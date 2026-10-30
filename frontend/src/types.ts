@@ -3,6 +3,22 @@ export interface AuthUser {
   name: string;
   email: string;
   createdAt: string;
+  emailVerified?: boolean;
+  active?: boolean;
+  permissions?: string[];
+}
+
+export interface Profile {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  createdAt: string;
+}
+
+export interface ProfileRequest {
+  email: string;
+  phone: string | null;
 }
 
 export interface LoginResponse {
@@ -18,6 +34,41 @@ export interface UserRequest {
   name: string;
   email: string;
   password: string;
+}
+
+export interface RegisterRequest extends UserRequest {
+  phone: string;
+}
+
+export interface Permission {
+  code: string;
+  name: string;
+  description: string;
+}
+
+export interface ManagedUser {
+  id: string;
+  name: string;
+  email: string;
+  active: boolean;
+  emailVerified: boolean;
+  permissionCount: number;
+  permissions: string[];
+}
+
+export interface CreateManagedUserRequest {
+  name: string;
+  email: string;
+  permissions: string[];
+}
+
+export interface AuditEvent {
+  id: string;
+  userName: string;
+  action: string;
+  resource: string;
+  resourceId: string | null;
+  createdAt: string;
 }
 
 export interface Client {

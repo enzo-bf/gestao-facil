@@ -9,9 +9,12 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.stereotype.Component;
 import org.springframework.http.HttpMethod;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -27,12 +30,20 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final JwtService jwtService;
     private final TokenRevocationRepository tokenRevocationRepository;
     private final AuthenticationEntryPoint authenticationEntryPoint;
+    private final UserDetailsService userDetailsService;
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getServletPath();
         return (HttpMethod.POST.matches(request.getMethod())
-                    && ("/api/v1/auth/login".equals(path) || "/api/v1/setup/first-user".equals(path)))
+                    && ("/api/v1/auth/login".equals(path)
+                        || "/api/v1/auth/register".equals(path)
+                        || "/api/v1/auth/verify-email".equals(path)
+                        || "/api/v1/auth/resend-verification".equals(path)
+                        || "/api/v1/auth/forgot-password".equals(path)
+                        || "/api/v1/auth/reset-password".equals(path)
+                        || "/api/v1/auth/activate-invitation".equals(path)
+                        || "/api/v1/setup/first-user".equals(path)))
                 || (HttpMethod.GET.matches(request.getMethod())
                     && ("/api/v1/auth/csrf".equals(path) || "/api/v1/setup/status".equals(path)));
     }
@@ -59,15 +70,23 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             if (tokenRevocationRepository.isRevoked(tokenId)) {
                 throw new JwtException("O token foi revogado.");
             }
+            UserDetails userDetails = userDetailsService.loadUserByUsername(subject);
+            if (!userDetails.isEnabled()) {
+                throw new JwtException("A conta está desativada.");
+            }
+            if (userDetails instanceof SessionUserDetails sessionUserDetails
+                    && sessionUserDetails.credentialVersion() != jwtService.extractCredentialVersion(token)) {
+                throw new JwtException("A sessão foi invalidada após uma alteração de credenciais.");
+            }
             UsernamePasswordAuthenticationToken authentication =
                     new UsernamePasswordAuthenticationToken(
-                            subject,
+                            userDetails.getUsername(),
                             null,
-                            List.of(new SimpleGrantedAuthority("ROLE_USER"))
+                            userDetails.getAuthorities()
                     );
             authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
             SecurityContextHolder.getContext().setAuthentication(authentication);
-        } catch (JwtException | IllegalArgumentException exception) {
+        } catch (JwtException | IllegalArgumentException | AuthenticationException exception) {
             SecurityContextHolder.clearContext();
             authenticationEntryPoint.commence(
                     request,

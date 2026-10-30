@@ -8,18 +8,32 @@ import { EmptyState } from "../components/EmptyState";
 import { LoadingState } from "../components/LoadingState";
 import { Modal } from "../components/Modal";
 import { useToast } from "../components/ToastProvider";
+import { usePermission } from "../auth/PermissionContext";
 import { clientsApi, getApiErrorMessage } from "../lib/api";
+import {
+  digitsOnly,
+  formatBrazilianDocument,
+  formatBrazilianPhone,
+  isValidBrazilianDocument,
+  isValidBrazilianPhone,
+} from "../lib/brazilian-inputs";
 import type { Client, ClientRequest } from "../types";
 
 const clientSchema = z.object({
-  name: z.string().trim().min(2, "Informe o nome do cliente.").max(150, "Use até 150 caracteres."),
-  phone: z.string().trim().min(1, "Informe o telefone.").max(20, "Use até 20 caracteres."),
+  name: z.string().trim().min(2, "Informe o nome do cliente.").max(150, "Use até 150 caracteres.")
+    .regex(/^[\p{L}]+(?:\s+[\p{L}]+)*$/u, "Nome deve conter apenas letras e espaços."),
+  phone: z.string().trim().refine(isValidBrazilianPhone, "Informe um telefone brasileiro válido."),
   email: z.union([z.literal(""), z.email("Informe um e-mail válido.").max(150, "Use até 150 caracteres.")]),
-  document: z.string().max(20, "Use até 20 caracteres."),
+  document: z.string().refine((value) => !value.trim() || isValidBrazilianDocument(value), "Informe um CPF ou CNPJ válido."),
 });
 type ClientFormValues = z.infer<typeof clientSchema>;
 
 export function ClientsPage() {
+  const { hasPermission } = usePermission();
+  const canCreate = hasPermission("CLIENT_CREATE");
+  const canUpdate = hasPermission("CLIENT_UPDATE");
+  const canDelete = hasPermission("CLIENT_DELETE");
+  const canManage = canUpdate || canDelete;
   const queryClient = useQueryClient();
   const toast = useToast();
   const clients = useQuery({ queryKey: ["clients"], queryFn: clientsApi.findAll });
@@ -33,9 +47,9 @@ export function ClientsPage() {
     mutationFn: (values: ClientFormValues) => {
       const request: ClientRequest = {
         name: values.name.trim(),
-        phone: values.phone.trim(),
+        phone: digitsOnly(values.phone),
         email: values.email.trim() || null,
-        document: values.document.trim() || null,
+        document: digitsOnly(values.document) || null,
       };
       return editing ? clientsApi.update(editing.id, request) : clientsApi.create(request);
     },
@@ -84,7 +98,7 @@ export function ClientsPage() {
     <div className="page-stack">
       <section className="page-intro-row">
         <div><span className="section-eyebrow">RELACIONAMENTO</span><h1>Seus clientes</h1><p>Cuide bem de quem faz o seu negócio acontecer.</p></div>
-        <button className="button button-primary" onClick={openCreate}><Plus size={18} /> Novo cliente</button>
+        {canCreate && <button className="button button-primary" onClick={openCreate}><Plus size={18} /> Novo cliente</button>}
       </section>
 
       <section className="content-card list-card">
@@ -98,25 +112,25 @@ export function ClientsPage() {
           <EmptyState
             title={search ? "Nenhum resultado por aqui" : "Sua carteira começa aqui"}
             description={search ? "Tente buscar por outro nome, e-mail ou telefone." : "Cadastre seu primeiro cliente e mantenha tudo organizado."}
-            action={search ? <button className="button button-ghost button-small" onClick={() => setSearch("")}><X size={15} /> Limpar busca</button> : <button className="button button-secondary button-small" onClick={openCreate}><Plus size={15} /> Adicionar cliente</button>}
+            action={search ? <button className="button button-ghost button-small" onClick={() => setSearch("")}><X size={15} /> Limpar busca</button> : canCreate ? <button className="button button-secondary button-small" onClick={openCreate}><Plus size={15} /> Adicionar cliente</button> : undefined}
           />
         ) : (
           <div className="table-scroll">
             <table className="data-table clients-table">
-              <thead><tr><th>CLIENTE</th><th>TELEFONE</th><th>E-MAIL</th><th className="align-right">AÇÕES</th></tr></thead>
+              <thead><tr><th>CLIENTE</th><th>TELEFONE</th><th>E-MAIL</th>{canManage && <th className="align-right">AÇÕES</th>}</tr></thead>
               <tbody>{filteredClients.map((client) => (
                 <tr key={client.id}>
                   <td><div className="client-cell"><span className={`client-avatar client-avatar-${hash(client.name) % 5}`}>{initials(client.name)}</span><span><strong className="table-primary">{client.name}</strong><small>Cliente</small></span></div></td>
-                  <td><span className="phone-cell">{client.phone}</span></td>
+                  <td><span className="phone-cell">{formatBrazilianPhone(client.phone)}</span></td>
                   <td>{client.email ? <span className="email-cell"><Mail size={14} />{client.email}</span> : <span className="muted-cell">Não informado</span>}</td>
-                  <td className="align-right">
+                  {canManage && <td className="align-right">
                     <div className="row-actions">
-                      <button className="icon-button row-action-button" onClick={() => openEdit(client)} aria-label={`Editar ${client.name}`} title="Editar"><Pencil size={16} /></button>
-                      <button className="icon-button row-action-button danger-hover" onClick={() => setDeleting(client)} aria-label={`Excluir ${client.name}`} title="Excluir"><Trash2 size={16} /></button>
-                      <button className="icon-button row-action-button mobile-more" onClick={() => setMenuFor(menuFor === client.id ? null : client.id)} aria-label="Mais ações"><MoreHorizontal size={17} /></button>
-                      {menuFor === client.id && <div className="row-menu"><button onClick={() => openEdit(client)}><Pencil size={15} />Editar</button><button className="row-menu-danger" onClick={() => { setDeleting(client); setMenuFor(null); }}><Trash2 size={15} />Excluir</button></div>}
+                      {canUpdate && <button className="icon-button row-action-button" onClick={() => openEdit(client)} aria-label={`Editar ${client.name}`} title="Editar"><Pencil size={16} /></button>}
+                      {canDelete && <button className="icon-button row-action-button danger-hover" onClick={() => setDeleting(client)} aria-label={`Excluir ${client.name}`} title="Excluir"><Trash2 size={16} /></button>}
+                      {(canUpdate || canDelete) && <button className="icon-button row-action-button mobile-more" onClick={() => setMenuFor(menuFor === client.id ? null : client.id)} aria-label="Mais ações"><MoreHorizontal size={17} /></button>}
+                      {menuFor === client.id && <div className="row-menu">{canUpdate && <button onClick={() => openEdit(client)}><Pencil size={15} />Editar</button>}{canDelete && <button className="row-menu-danger" onClick={() => { setDeleting(client); setMenuFor(null); }}><Trash2 size={15} />Excluir</button>}</div>}
                     </div>
-                  </td>
+                  </td>}
                 </tr>
               ))}</tbody>
             </table>
@@ -125,8 +139,8 @@ export function ClientsPage() {
         {!clients.isLoading && !clients.isError && filteredClients.length > 0 && <div className="table-footer"><span>Mostrando <strong>{filteredClients.length}</strong> de <strong>{clients.data?.length ?? 0}</strong> clientes</span><span className="table-footer-note"><span /> Carteira atualizada</span></div>}
       </section>
 
-      {showForm && <ClientFormModal client={editing} saving={saveMutation.isPending} onClose={() => { setShowForm(false); setEditing(null); }} onSubmit={(values) => saveMutation.mutate(values)} />}
-      {deleting && <Modal title="Excluir cliente" description="Essa ação não pode ser desfeita." onClose={() => setDeleting(null)}>
+      {showForm && (editing ? canUpdate : canCreate) && <ClientFormModal client={editing} saving={saveMutation.isPending} onClose={() => { setShowForm(false); setEditing(null); }} onSubmit={(values) => saveMutation.mutate(values)} />}
+      {deleting && canDelete && <Modal title="Excluir cliente" description="Essa ação não pode ser desfeita." onClose={() => setDeleting(null)}>
         <div className="confirm-copy"><span className="confirm-icon"><Trash2 size={19} /></span><p>Tem certeza que deseja excluir <strong>{deleting.name}</strong>?</p></div>
         <div className="modal-actions"><button className="button button-ghost" onClick={() => setDeleting(null)}>Cancelar</button><button className="button button-danger" onClick={() => deleteMutation.mutate(deleting.id)} disabled={deleteMutation.isPending}>{deleteMutation.isPending ? "Excluindo..." : "Excluir cliente"}</button></div>
       </Modal>}
@@ -154,10 +168,10 @@ function ClientFormModal({ client, saving, onClose, onSubmit }: {
     <form className="modal-form" onSubmit={handleSubmit(onSubmit)} noValidate>
       <label className="form-field"><span className="field-label">Nome completo <b>*</b></span><input className={`text-input ${errors.name ? "text-input-invalid" : ""}`} placeholder="Ex.: Mariana Costa" {...register("name")} />{errors.name && <span className="field-error">{errors.name.message}</span>}</label>
       <div className="form-grid-two">
-        <label className="form-field"><span className="field-label">Telefone <b>*</b></span><input className={`text-input ${errors.phone ? "text-input-invalid" : ""}`} placeholder="(11) 99999-0000" {...register("phone")} />{errors.phone && <span className="field-error">{errors.phone.message}</span>}</label>
+        <label className="form-field"><span className="field-label">Telefone <b>*</b></span><input className={`text-input ${errors.phone ? "text-input-invalid" : ""}`} placeholder="(11) 99999-0000" inputMode="tel" {...register("phone", { onChange: (event) => { event.target.value = formatBrazilianPhone(event.target.value); } })} />{errors.phone && <span className="field-error">{errors.phone.message}</span>}</label>
         <label className="form-field"><span className="field-label">E-mail <small>Opcional</small></span><input type="email" className={`text-input ${errors.email ? "text-input-invalid" : ""}`} placeholder="cliente@email.com" {...register("email")} />{errors.email && <span className="field-error">{errors.email.message}</span>}</label>
       </div>
-      <label className="form-field"><span className="field-label">CPF ou CNPJ <small>Opcional</small></span><input className={`text-input ${errors.document ? "text-input-invalid" : ""}`} placeholder="000.000.000-00" {...register("document")} />{errors.document && <span className="field-error">{errors.document.message}</span>}</label>
+      <label className="form-field"><span className="field-label">CPF ou CNPJ <small>Opcional</small></span><input className={`text-input ${errors.document ? "text-input-invalid" : ""}`} placeholder="000.000.000-00" inputMode="numeric" {...register("document", { onChange: (event) => { event.target.value = formatBrazilianDocument(event.target.value); } })} />{errors.document && <span className="field-error">{errors.document.message}</span>}</label>
       <div className="modal-actions"><button type="button" className="button button-ghost" onClick={onClose}>Cancelar</button><button type="submit" className="button button-primary" disabled={saving}>{saving ? <><span className="button-spinner" /> Salvando...</> : client ? "Salvar alterações" : <><Plus size={17} /> Cadastrar cliente</>}</button></div>
     </form>
   </Modal>;
